@@ -467,7 +467,7 @@ function submitBingoPurchase(e) {
 }
 
 // ==========================================
-// 7. LEADERBOARD & COUNTDOWN
+// 7. LEADERBOARD
 // ==========================================
 function renderLeaderboards() {
     renderCategory('money', 'leaderboard-money', 'No Money contributions yet', val => '$' + val.toFixed(2));
@@ -599,3 +599,31 @@ window.addEventListener('DOMContentLoaded', () => {
     showToast('Payment was canceled.');
   }
 });
+
+// ==========================================
+// 10. BINGO COUNTDOWN TIMER (DEC 1, 2026 @ 4:00 PM MST)
+// ==========================================
+const BINGO_DEADLINE = new Date("2026-12-01T16:00:00-07:00").getTime();
+
+function updateBingoCountdown() {
+  const timerEl = document.getElementById("bingo-countdown"); // Match your HTML timer element ID
+  if (!timerEl) return;
+
+  const now = Date.now();
+  const distance = BINGO_DEADLINE - now;
+
+  if (distance <= 0) {
+    timerEl.innerText = "Bingo Sales Closed";
+    return;
+  }
+
+  const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+  timerEl.innerText = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+}
+
+updateBingoCountdown();
+setInterval(updateBingoCountdown, 1000);
