@@ -4,6 +4,22 @@
 // 1. PASTE YOUR TWO STRIPE PAYMENT LINKS HERE:
 const STRIPE_DONATION_LINK = "https://stripe.com";
 const STRIPE_BINGO_LINK = "https://stripe.com";
+const ADMIN_PASSCODE = "DECA2026";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAOuzBOY_6foe65E4kp03yD9G_pIo_R1Tc",
+  authDomain: "deca-10-10-10-database.firebaseapp.com",
+  databaseURL: "https://deca-10-10-10-database-default-rtdb.firebaseio.com",
+  projectId: "deca-10-10-10-database",
+  storageBucket: "deca-10-10-10-database.firebasestorage.app",
+  messagingSenderId: "761736898594",
+  appId: "1:761736898594:web:1dddb628ad03309415427b"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+
 
 // Replace each placeholder URL with the unique link for that Bingo card:
 const BINGO_CARD_LINKS = {
@@ -111,81 +127,67 @@ const BINGO_CARD_LINKS = {
 const BINGO_TARGET_TIME = new Date('2026-11-20T16:30:00-07:00').getTime();
 
 // ==========================================
-// 2. STATE & 1–100 BINGO INVENTORY POOL
+// 2. STATE & 1-100 BINGO INVENTORY POOL (FIREBASE SYNC)
 // ==========================================
-let contributions = JSON.parse(localStorage.getItem('deca_contributions')) || [];
+let contributions = [];
+let claimedCards = {}; // Stores { "1": true, "42": true, ... } from Firebase
 let selectedPreset = null;
 
+// Listen for real-time updates to all contributions & bingo purchases across devices
+db.ref('contributions').on('value', (snapshot) => {
+  const data = snapshot.val();
+  contributions = data ? Object.values(data) : [];
+  renderLeaderboards();
+  if (!document.getElementById('view-admin-bingo').classList.contains('hidden')) {
+    renderAdminBingoPurchases();
+  }
+});
+
+// Listen for real-time updates to claimed Bingo cards (1–100)
+db.ref('claimedCards').on('value', (snapshot) => {
+  claimedCards = snapshot.val() || {};
+  const badge = document.getElementById('bingo-stock-badge');
+  if (badge) {
+    badge.innerText = `${getAvailableBingoPool().length} of 100 cards remaining`;
+  }
+});
+
 function getAvailableBingoPool() {
-    const saved = localStorage.getItem('deca_bingo_pool');
-    if (saved) return JSON.parse(saved);
-
-    const freshPool = Array.from({ length: 100 }, (_, i) => i + 1);
-    localStorage.setItem('deca_bingo_pool', JSON.stringify(freshPool));
-    return freshPool;
+  const available = [];
+  for (let i = 1; i <= 100; i++) {
+    if (!claimedCards[i]) {
+      available.push(i);
+    }
+  }
+  return available;
 }
 
-function allocateUniqueBingoCard() {
-    let pool = getAvailableBingoPool();
-    if (pool.length === 0) return null;
+// Atomically claims a random unclaimed card in Firebase so two devices never get the same card
+async function allocateUniqueBingoCard() {
+  const pool = getAvailableBingoPool();
+  if (pool.length === 0) return null;
 
-    const randomIndex = Math.floor(Math.random() * pool.length);
-    const pickedNumber = pool.splice(randomIndex, 1)[0];
+  // Shuffle available numbers
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
 
-    localStorage.setItem('deca_bingo_pool', JSON.stringify(pool));
-    return pickedNumber;
-}
-
-function showBingoSuccessScreen(cardNumber) {
-    const uniqueUrl = BINGO_CARD_LINKS[cardNumber] || `https://your-link.com{cardNumber}`;
-
-    hideAllViews();
-    const linkEl = document.getElementById('revealed-card-link');
-    const openBtn = document.getElementById('open-card-btn');
-
-    linkEl.href = uniqueUrl;
-    linkEl.innerText = uniqueUrl;
-    openBtn.href = uniqueUrl;
-
-    document.getElementById('view-bingo-success').classList.remove('hidden');
-    window.scrollTo(0, 0);
-}
-
-function copyRevealedCardLink() {
-    const url = document.getElementById('revealed-card-link').innerText;
-    navigator.clipboard.writeText(url).then(() => {
-        showToast('Bingo card link copied!');
+  for (const candidate of pool) {
+    const result = await db.ref(`claimedCards/${candidate}`).transaction((current) => {
+      if (current === null) {
+        return true; // Claim this card number
+      }
+      return; // Abort transaction if another device just claimed it
     });
-}
-function updateBingoCountdown() {
-    const diff = Math.max(0, BINGO_TARGET_TIME - Date.now());
-    const totalHours = Math.floor(diff / (1000 * 60 * 60));
-    const days = String(Math.floor(totalHours / 24)).padStart(2, '0');
-    const hours = String(totalHours % 24).padStart(2, '0');
 
-    const dayTens = document.getElementById('day-tens');
-    if (dayTens) {
-        dayTens.innerText = days.charAt(0);
-        document.getElementById('day-units').innerText = days.charAt(1);
-        document.getElementById('hour-tens').innerText = hours.charAt(0);
-        document.getElementById('hour-units').innerText = hours.charAt(1);
+    if (result.committed) {
+      return candidate;
     }
+  }
 
-    const purchaseBtn = document.getElementById('bingo-purchase-btn');
-    const closedMsg = document.getElementById('bingo-closed-msg');
-    if (purchaseBtn && closedMsg) {
-        if (diff === 0) {
-            purchaseBtn.classList.add('hidden');
-            closedMsg.classList.remove('hidden');
-        } else {
-            purchaseBtn.classList.remove('hidden');
-            closedMsg.classList.add('hidden');
-        }
-    }
+  return null; // All cards claimed
 }
-
-updateBingoCountdown();
-setInterval(updateBingoCountdown, 10000);
 
 // ==========================================
 // 3. NAVIGATION & UI CONTROLS
@@ -196,33 +198,52 @@ function toggleMenu() {
 }
 
 function hideAllViews() {
-    ['view-home', 'view-record', 'view-leaderboard', 'view-bingo', 'view-bingo-purchase', 'view-bingo-success'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
-    });
-    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+  ['view-home', 'view-record', 'view-leaderboard', 'view-bingo', 'view-bingo-purchase', 'view-bingo-success', 'view-admin-bingo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
 }
 
 function navigateTo(page) {
-    hideAllViews();
-    const headerTitle = document.getElementById('header-title');
-
-    if (page === 'home') {
-        document.getElementById('view-home').classList.remove('hidden');
-        headerTitle.innerText = 'Valor DECA 10/10/10';
-        document.getElementById('nav-home').classList.add('active');
-    } else if (page === 'leaderboard') {
-        document.getElementById('view-leaderboard').classList.remove('hidden');
-        headerTitle.innerText = 'Leaderboard';
-        document.getElementById('nav-leaderboard').classList.add('active');
-        renderLeaderboards();
-    } else if (page === 'bingo') {
-        document.getElementById('view-bingo').classList.remove('hidden');
-        headerTitle.innerText = 'Valor DECA 10/10/10';
-        document.getElementById('nav-bingo').classList.add('active');
+  if (page === 'admin-bingo') {
+    const isUnlocked = sessionStorage.getItem('deca_admin_unlocked') === 'true';
+    if (!isUnlocked) {
+      const entered = prompt('Enter Admin Passcode:');
+      if (entered === null) return; // User clicked Cancel
+      if (entered !== ADMIN_PASSCODE) {
+        showToast('Incorrect admin passcode.');
+        return;
+      }
+      sessionStorage.setItem('deca_admin_unlocked', 'true');
     }
-    document.getElementById('nav-drawer').classList.add('hidden');
+  }
+
+  hideAllViews();
+  const headerTitle = document.getElementById('header-title');
+
+  if (page === 'home') {
+    document.getElementById('view-home').classList.remove('hidden');
+    headerTitle.innerText = 'Valor DECA 10/10/10';
+    document.getElementById('nav-home').classList.add('active');
+  } else if (page === 'leaderboard') {
+    document.getElementById('view-leaderboard').classList.remove('hidden');
+    headerTitle.innerText = 'Leaderboard';
+    document.getElementById('nav-leaderboard').classList.add('active');
+    renderLeaderboards();
+  } else if (page === 'bingo') {
+    document.getElementById('view-bingo').classList.remove('hidden');
+    headerTitle.innerText = 'Valor DECA 10/10/10';
+    document.getElementById('nav-bingo').classList.add('active');
+  } else if (page === 'admin-bingo') {
+    document.getElementById('view-admin-bingo').classList.remove('hidden');
+    headerTitle.innerText = 'Admin: Bingo Purchases';
+    document.getElementById('nav-admin-bingo').classList.add('active');
+    renderAdminBingoPurchases();
+  }
+  document.getElementById('nav-drawer').classList.add('hidden');
 }
+
 
 // ==========================================
 // 4. QUICK DONATE & LIVE PAYMENT
@@ -286,51 +307,54 @@ function processLiveCheckout(pendingItem) {
 }
 
 
-function completePendingDonation() {
-    const savedPending = JSON.parse(localStorage.getItem('deca_pending_donation'));
-    if (!savedPending) return;
+async function completePendingDonation() {
+  const savedPending = JSON.parse(localStorage.getItem('deca_pending_donation'));
+  if (!savedPending) return;
 
-    let finalDescription = savedPending.description || 'Live Online Donation';
-    let assignedCardNumber = null;
+  let finalDescription = savedPending.description || 'Live Online Donation';
+  let assignedCardNumber = null;
 
-    if (savedPending.type === 'bingo') {
-        assignedCardNumber = allocateUniqueBingoCard();
-        if (!assignedCardNumber) {
-            showToast('Sorry, all Bingo cards are sold out!');
-            localStorage.removeItem('deca_pending_donation');
-            return;
-        }
-
-        const hiddenInput = document.getElementById('hidden-generated-cards');
-        if (hiddenInput) hiddenInput.value = assignedCardNumber;
-        finalDescription = `Bingo Card Purchase (Card #${assignedCardNumber})`;
+  if (savedPending.type === 'bingo') {
+    assignedCardNumber = await allocateUniqueBingoCard();
+    if (!assignedCardNumber) {
+      showToast('Sorry, all Bingo cards are sold out!');
+      localStorage.removeItem('deca_pending_donation');
+      return;
     }
 
-    const today = new Date();
-    contributions.push({
-        id: Date.now(),
-        name: savedPending.name,
-        category: 'money',
-        description: finalDescription,
-        amount: savedPending.amount,
-        date: `${today.getMonth() + 1}/${today.getDate()}/${today.getFullYear()}`
-    });
+    const hiddenInput = document.getElementById('hidden-generated-cards');
+    if (hiddenInput) hiddenInput.value = assignedCardNumber;
+    finalDescription = `Bingo Card Purchase (Card #${assignedCardNumber})`;
+  }
 
-    localStorage.setItem('deca_contributions', JSON.stringify(contributions));
-    localStorage.removeItem('deca_pending_donation');
+  const today = new Date();
+  const newEntryRef = db.ref('contributions').push();
+  await newEntryRef.set({
+    id: Date.now(),
+    name: savedPending.name,
+    realName: savedPending.realName || savedPending.name,
+    category: 'money',
+    description: finalDescription,
+    cardNumber: assignedCardNumber,
+    amount: savedPending.amount,
+    date: `${today.getMonth() + 1}/${today.getDate()}/${today.getFullYear()}`
+  });
 
-    clearPresetSelection();
-    document.getElementById('quick-custom-amount').value = '';
-    document.getElementById('quick-donor-name').value = '';
+  localStorage.removeItem('deca_pending_donation');
 
-    if (savedPending.type === 'bingo' && assignedCardNumber) {
-        showBingoSuccessScreen(assignedCardNumber);
-        showToast('$5.00 added to leaderboard!');
-    } else {
-        navigateTo('leaderboard');
-        showToast(`Thank you! $${savedPending.amount.toFixed(2)} recorded on leaderboard.`);
-    }
+  clearPresetSelection();
+  document.getElementById('quick-custom-amount').value = '';
+  document.getElementById('quick-donor-name').value = '';
+
+  if (savedPending.type === 'bingo' && assignedCardNumber) {
+    showBingoSuccessScreen(assignedCardNumber);
+    showToast('$5.00 added to leaderboard!');
+  } else {
+    navigateTo('leaderboard');
+    showToast(`Thank you! $${savedPending.amount.toFixed(2)} recorded on leaderboard.`);
+  }
 }
+
 
 // ==========================================
 // 5. MANUAL RECORDING FORMS
@@ -372,32 +396,33 @@ function openRecordForm(type) {
 }
 
 function submitContribution(e) {
-    e.preventDefault();
-    const type = document.getElementById('entry-type').value;
-    const firstName = document.getElementById('first-name').value.trim();
-    const lastName = document.getElementById('last-name').value.trim();
-    const fullName = `${firstName} ${lastName}`;
-    const description = document.getElementById('entry-description').value.trim();
-    const isPublic = document.getElementById('is-public').checked;
-    const amount = parseFloat(document.getElementById('entry-amount').value);
+  e.preventDefault();
+  const type = document.getElementById('entry-type').value;
+  const firstName = document.getElementById('first-name').value.trim();
+  const lastName = document.getElementById('last-name').value.trim();
+  const fullName = `${firstName} ${lastName}`;
+  const description = document.getElementById('entry-description').value.trim();
+  const isPublic = document.getElementById('is-public').checked;
+  const amount = parseFloat(document.getElementById('entry-amount').value);
 
-    const month = document.getElementById('date-month').value;
-    const day = document.getElementById('date-day').value;
-    const year = document.getElementById('date-year').value;
+  const month = document.getElementById('date-month').value;
+  const day = document.getElementById('date-day').value;
+  const year = document.getElementById('date-year').value;
 
-    contributions.push({
-        id: Date.now(),
-        name: isPublic ? fullName : 'Anonymous Contributor',
-        category: type,
-        description: description,
-        amount: amount,
-        date: `${month}/${day}/${year}`
-    });
+  db.ref('contributions').push({
+    id: Date.now(),
+    name: isPublic ? fullName : 'Anonymous Contributor',
+    realName: fullName,
+    category: type,
+    description: description,
+    amount: amount,
+    date: `${month}/${day}/${year}`
+  });
 
-    localStorage.setItem('deca_contributions', JSON.stringify(contributions));
-    navigateTo('leaderboard');
-    showToast('Contribution submitted!');
+  navigateTo('leaderboard');
+  showToast('Contribution submitted!');
 }
+
 
 // ==========================================
 // 6. BINGO CARD PURCHASE & INVENTORY
@@ -422,22 +447,25 @@ document.getElementById('view-bingo-purchase').classList.remove('hidden');
 window.scrollTo(0, 0);
 }
 function submitBingoPurchase(e) {
-e.preventDefault();
-const remaining = getAvailableBingoPool().length;
-if (remaining < 1) {
-showToast('Sorry, all Bingo cards are sold out!');
-return;
+  e.preventDefault();
+  const remaining = getAvailableBingoPool().length;
+  if (remaining < 1) {
+    showToast('Sorry, all Bingo cards are sold out!');
+    return;
+  }
+
+  const rawBuyerName = document.getElementById('bingo-buyer-name').value.trim();
+  const isPublic = document.getElementById('bingo-is-public').checked;
+  processLiveCheckout({
+    type: 'bingo',
+    qty: 1,
+    name: isPublic ? rawBuyerName : 'Anonymous Contributor',
+    realName: rawBuyerName,
+    amount: 5.00,
+    description: 'Bingo Card Purchase (1x)'
+  });
 }
-const rawBuyerName = document.getElementById('bingo-buyer-name').value.trim();
-const isPublic = document.getElementById('bingo-is-public').checked;
-processLiveCheckout({
-type: 'bingo',
-qty: 1,
-name: isPublic ? rawBuyerName : 'Anonymous Contributor',
-amount: 5.00,
-description: 'Bingo Card Purchase (1x)'
-});
-}
+
 // ==========================================
 // 7. LEADERBOARD & COUNTDOWN
 // ==========================================
@@ -481,3 +509,93 @@ function renderCategory(category, containerId, emptyText, formatFn) {
 
     container.innerHTML = '<div class="ranking-list">' + rowsHtml + '</div>';
 }
+
+// ==========================================
+// 8. ADMIN BINGO PURCHASES LOG
+// ==========================================
+function renderAdminBingoPurchases() {
+  const container = document.getElementById('admin-bingo-list');
+  const summary = document.getElementById('admin-bingo-summary');
+  const sortOrder = document.getElementById('admin-bingo-sort').value;
+
+  // Filter for Bingo Card purchases (supports both new cardNumber field and older entries)
+  const bingoPurchases = contributions.filter(c =>
+    c.cardNumber || (c.description && c.description.startsWith('Bingo Card Purchase'))
+  );
+
+  const totalRevenue = bingoPurchases.reduce((sum, item) => sum + item.amount, 0);
+  summary.innerText = `${bingoPurchases.length} / 100 Sold ($${totalRevenue.toFixed(2)})`;
+
+  if (bingoPurchases.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-title">No Bingo Purchases Yet</div>
+        <div class="empty-desc">Purchased cards will appear here in chronological order.</div>
+      </div>
+    `;
+    return;
+  }
+
+  // Sort by exact timestamp (id = Date.now())
+  const sorted = [...bingoPurchases].sort((a, b) =>
+    sortOrder === 'newest' ? b.id - a.id : a.id - b.id
+  );
+
+  container.innerHTML = sorted.map(item => {
+    // Extract card number if missing on older records
+    const cardNum = item.cardNumber || (item.description.match(/Card #(\d+)/) || [])[1];
+    const cardUrl = cardNum ? BINGO_CARD_LINKS[cardNum] : null;
+    const displayName = item.realName || item.name;
+    const timeStr = new Date(item.id).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    return `
+      <div class="ranking-row" style="align-items: flex-start; gap: 10px;">
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 14px; color: #0f172a;">
+            ${displayName}
+            ${item.name === 'Anonymous Contributor' ? '<span style="font-size: 11px; font-weight: 500; color: #64748b;">(Hidden on Leaderboard)</span>' : ''}
+          </div>
+          <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+            Purchased: <strong>${item.date}</strong> at ${timeStr}
+          </div>
+          ${cardUrl ? `<a href="${cardUrl}" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #2563eb; text-decoration: underline; display: inline-block; margin-top: 4px;">Card #${cardNum} Link &nearr;</a>` : ''}
+        </div>
+        <div style="text-align: right;">
+          <span class="rank-badge rank-badge-top">Card #${cardNum || '?'}</span>
+          <div class="rank-score" style="margin-top: 4px;">$${item.amount.toFixed(2)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+function lockAdminView() {
+  sessionStorage.removeItem('deca_admin_unlocked');
+  navigateTo('home');
+  showToast('Admin view locked.');
+}
+
+// ==========================================
+// 9. GENERIC PAYMENT REDIRECT RETURN HANDLER
+// ==========================================
+window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+  const paymentStatus = urlParams.get('payment') || hashParams.get('payment');
+  const hasPendingDonation = Boolean(localStorage.getItem('deca_pending_donation'));
+
+  if (paymentStatus === 'success' && hasPendingDonation) {
+    // Clean the URL first so refreshing the page does not re-trigger the reward
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    // Claim the unique Bingo card (if applicable) and save to Firebase
+    completePendingDonation();
+  } else if (paymentStatus === 'cancel') {
+    // Optional: clean URL and notify user if they canceled at checkout
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+    localStorage.removeItem('deca_pending_donation');
+    showToast('Payment was canceled.');
+  }
+});

@@ -42,6 +42,7 @@
                         <button onclick="navigateTo('home')" id="nav-home" class="nav-item active">Home</button>
                         <button onclick="navigateTo('leaderboard')" id="nav-leaderboard" class="nav-item">Leaderboard</button>
                         <button onclick="navigateTo('bingo')" id="nav-bingo" class="nav-item">Temporary Bingo</button>
+                        <button onclick="navigateTo('admin-bingo')" id="nav-admin-bingo" class="nav-item">Admin: Bingo Log</button>
                     </nav>
                 </div>
             </div>
@@ -283,6 +284,33 @@
                     </button>
                 </div>
 
+                <div id="view-admin-bingo" class="hidden">
+                    <div class="record-header">
+                     <button type="button" onclick="navigateTo('home')" class="back-link">&larr; Back</button>
+                     <h2 class="record-title">Admin: Bingo Purchases</h2>
+                     </div>
+                     <hr class="record-divider">
+
+                     <div class="record-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <button type="button" onclick="navigateTo('home')" class="back-link">&larr; Back</button>
+                         <h2 class="record-title">Bingo Card Purchases</h2>
+                         <button type="button" onclick="lockAdminView()" class="back-link" style="color: #dc2626;">Lock</button>
+                    </div>
+
+
+                     <div class="jot-group" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                      <span id="admin-bingo-count" style="font-size: 13px; font-weight: 600; color: #4b5563;">Total Sold: 0</span>
+                        <select id="admin-bingo-sort" onchange="renderAdminBingoPurchases()" class="jot-input" style="width: auto; padding: 6px 10px; font-size: 13px;">
+                             <option value="newest">Newest First</option>
+                          <option value="oldest">Oldest First</option>
+                         </select>
+                     </div>
+                     <div id="admin-bingo-list" style="display: flex; flex-direction: column; gap: 10px;">
+                         <!-- Purchases will be injected here via JavaScript -->
+                     </div>
+                </div>
+
+
             </main>
         </div>
 
@@ -291,6 +319,28 @@
 
     <input type="hidden" id="hidden-generated-cards" value="">
 
+    <script type="module">
+    // Import the functions you need from the SDKs you need
+     import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+     // TODO: Add SDKs for Firebase products that you want to use
+     // https://firebase.google.com/docs/web/setup#available-libraries
+
+     // Your web app's Firebase configuration
+     const firebaseConfig = {
+    apiKey: "AIzaSyAOuzBOY_6foe65E4kp03yD9G_pIo_R1Tc",
+    authDomain: "deca-10-10-10-database.firebaseapp.com",
+    databaseURL: "https://deca-10-10-10-database-default-rtdb.firebaseio.com",
+    projectId: "deca-10-10-10-database",
+    storageBucket: "deca-10-10-10-database.firebasestorage.app",
+    messagingSenderId: "761736898594",
+    appId: "1:761736898594:web:1dddb628ad03309415427b"
+  };
+
+     // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+    </script>
+
     <script src="script.js"></script>
+
 </body>
 </html>
