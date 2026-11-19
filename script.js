@@ -237,7 +237,6 @@ function navigateTo(page) {
     document.getElementById('nav-bingo').classList.add('active');
   } else if (page === 'admin-bingo') {
     document.getElementById('view-admin-bingo').classList.remove('hidden');
-    headerTitle.innerText = 'Admin: Bingo Purchases';
     document.getElementById('nav-admin-bingo').classList.add('active');
     renderAdminBingoPurchases();
   }
