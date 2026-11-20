@@ -124,8 +124,6 @@ const BINGO_CARD_LINKS = {
     100: "https://bingobaker.com/#6af64671a96b35c2"
 };
 
-const BINGO_TARGET_TIME = new Date('2026-11-20T16:30:00-07:00').getTime();
-
 // ==========================================
 // 2. STATE & 1-100 BINGO INVENTORY POOL (FIREBASE SYNC)
 // ==========================================
@@ -465,6 +463,19 @@ function submitBingoPurchase(e) {
   });
 }
 
+function showBingoSuccessScreen(cardNumber) {
+  hideAllViews();
+  const numEl = document.getElementById('success-card-number');
+  const linkEl = document.getElementById('success-card-link');
+  if (numEl) numEl.innerText = `#${cardNumber}`;
+  if (linkEl && BINGO_CARD_LINKS[cardNumber]) {
+    linkEl.href = BINGO_CARD_LINKS[cardNumber];
+  }
+  const successView = document.getElementById('view-bingo-success');
+  if (successView) successView.classList.remove('hidden');
+}
+
+
 // ==========================================
 // 7. LEADERBOARD
 // ==========================================
@@ -495,6 +506,8 @@ function renderCategory(category, containerId, emptyText, formatFn) {
     const totals = {};
     filtered.forEach(item => { totals[item.name] = (totals[item.name] || 0) + item.amount; });
     const sorted = Object.entries(totals)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
            const rowsHtml = sorted.map((person, index) => {
         const badgeClass = index === 0 ? 'rank-badge top' : 'rank-badge';
         return '<div class="ranking-row">' +
@@ -514,7 +527,7 @@ function renderCategory(category, containerId, emptyText, formatFn) {
 // ==========================================
 function renderAdminBingoPurchases() {
   const container = document.getElementById('admin-bingo-list');
-  const summary = document.getElementById('admin-bingo-summary');
+  const summary = document.getElementById('admin-bingo-count');
   const sortOrder = document.getElementById('admin-bingo-sort').value;
 
   // Filter for Bingo Card purchases (supports both new cardNumber field and older entries)
@@ -523,7 +536,9 @@ function renderAdminBingoPurchases() {
   );
 
   const totalRevenue = bingoPurchases.reduce((sum, item) => sum + item.amount, 0);
+  if (summary) {
   summary.innerText = `${bingoPurchases.length} / 100 Sold ($${totalRevenue.toFixed(2)})`;
+}
 
   if (bingoPurchases.length === 0) {
     container.innerHTML = `
@@ -602,7 +617,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // 10. BINGO COUNTDOWN TIMER (DEC 1, 2026 @ 4:00 PM MST)
 // ==========================================
-const BINGO_DEADLINE = new Date("2026-12-01T16:00:00-07:00").getTime();
+const BINGO_TARGET_TIME = new Date("2026-12-01T16:00:00-07:00").getTime();
 
 function updateBingoCountdown() {
   const dayTensEl = document.getElementById("day-tens");
@@ -613,7 +628,7 @@ function updateBingoCountdown() {
   if (!dayTensEl || !dayUnitsEl || !hourTensEl || !hourUnitsEl) return;
 
   const now = Date.now();
-  const distance = BINGO_DEADLINE - now;
+  const distance = BINGO_TARGET_TIME - now;
 
   if (distance <= 0) {
     dayTensEl.textContent = "0";
