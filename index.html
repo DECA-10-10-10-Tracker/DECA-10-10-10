@@ -314,29 +314,11 @@
 
     <input type="hidden" id="hidden-generated-cards" value="">
 
-    <script src="script.js"></script>
+      <!-- Firebase Compat SDKs (Required by script.js) -->
+  <script src="https://gstatic.com"></script>
+  <script src="https://gstatic.com"></script>
 
-    <script type="module">
-    // Import the functions you need from the SDKs you need
-     import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
-     // TODO: Add SDKs for Firebase products that you want to use
-     // https://firebase.google.com/docs/web/setup#available-libraries
-
-     // Your web app's Firebase configuration
-     const firebaseConfig = {
-    apiKey: "AIzaSyAOuzBOY_6foe65E4kp03yD9G_pIo_R1Tc",
-    authDomain: "deca-10-10-10-database.firebaseapp.com",
-    databaseURL: "https://deca-10-10-10-database-default-rtdb.firebaseio.com",
-    projectId: "deca-10-10-10-database",
-    storageBucket: "deca-10-10-10-database.firebasestorage.app",
-    messagingSenderId: "761736898594",
-    appId: "1:761736898594:web:1dddb628ad03309415427b"
-  };
-
-     // Initialize Firebase
-      const app = initializeApp(firebaseConfig);
-    </script>
-
-
+  <!-- Your App Logic -->
+  <script src="script.js?v=4"></script>
 </body>
 </html>
