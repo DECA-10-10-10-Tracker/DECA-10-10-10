@@ -605,23 +605,39 @@ window.addEventListener('DOMContentLoaded', () => {
 const BINGO_DEADLINE = new Date("2026-12-01T16:00:00-07:00").getTime();
 
 function updateBingoCountdown() {
-  const timerEl = document.getElementById("bingo-countdown"); // Match your HTML timer element ID
-  if (!timerEl) return;
+  const dayTensEl = document.getElementById("day-tens");
+  const dayUnitsEl = document.getElementById("day-units");
+  const hourTensEl = document.getElementById("hour-tens");
+  const hourUnitsEl = document.getElementById("hour-units");
+
+  if (!dayTensEl || !dayUnitsEl || !hourTensEl || !hourUnitsEl) return;
 
   const now = Date.now();
   const distance = BINGO_DEADLINE - now;
 
   if (distance <= 0) {
-    timerEl.innerText = "Bingo Sales Closed";
+    dayTensEl.textContent = "0";
+    dayUnitsEl.textContent = "0";
+    hourTensEl.textContent = "0";
+    hourUnitsEl.textContent = "0";
+
+    const purchaseBtn = document.getElementById("bingo-purchase-btn");
+    const closedMsg = document.getElementById("bingo-closed-msg");
+    if (purchaseBtn) purchaseBtn.classList.add("hidden");
+    if (closedMsg) closedMsg.classList.remove("hidden");
     return;
   }
 
   const days = Math.floor(distance / (1000 * 60 * 60 * 24));
   const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-  timerEl.innerText = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+  const daysStr = String(days).padStart(2, "0");
+  const hoursStr = String(hours).padStart(2, "0");
+
+  dayTensEl.textContent = daysStr[0];
+  dayUnitsEl.textContent = daysStr[1];
+  hourTensEl.textContent = hoursStr[0];
+  hourUnitsEl.textContent = hoursStr[1];
 }
 
 updateBingoCountdown();
